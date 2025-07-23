@@ -41,14 +41,19 @@ Developers are encouraged to follow standard Python packaging conventions when a
    ```bash
    pip install -r requirements.txt
    ```
-4. Run the example scripts that will be added under `src/` as the project evolves.
+4. (Optional) Install the project in editable mode so the modules are importable
+   without modifying `PYTHONPATH`:
+   ```bash
+   pip install -e .
+   ```
+5. Run the example scripts that will be added under `src/` as the project evolves.
 
 ## Running Tests
 
 After installing dependencies you can run the unit tests with:
 
 ```bash
-pytest
+PYTHONPATH=. pytest
 ```
 
 ## Environment Variables
