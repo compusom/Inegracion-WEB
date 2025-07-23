@@ -80,7 +80,6 @@ def procesar_reporte_rendimiento(input_files, output_dir, output_filename, statu
             adset_list_for_log = selected_adsets if isinstance(selected_adsets, list) else [selected_adsets]
             adset_display = 'Todos' if adset_list_for_log is None or adset_list_for_log == ['__ALL__'] else ", ".join(adset_list_for_log)
             log(f"AdSets Filtrados: {adset_display}")
-            insert_resumen_ejecutivo(log)
 
             log("\n--- Análisis de Rendimiento ---")
             log("\n--- Iniciando Agregación Diaria ---", importante=True)
@@ -91,6 +90,7 @@ def procesar_reporte_rendimiento(input_files, output_dir, output_filename, statu
                  status_queue.put("---ERROR---")
                  return
             log("Agregación diaria OK.")
+            insert_resumen_ejecutivo(df_daily_agg, log)
             
             log("\n--- Calculando Días Activos Totales ---", importante=True)
             active_days_results = _calcular_dias_activos_totales(df_combined)
@@ -124,8 +124,8 @@ def procesar_reporte_rendimiento(input_files, output_dir, output_filename, statu
 
 
             periods_for_entity_tables=[3,7,14,30]
-            insert_metricas_clave_simplificadas(log)
-            insert_metricas_avanzadas(log)
+            insert_metricas_clave_simplificadas(df_daily_agg, log, detected_currency)
+            insert_metricas_avanzadas(df_daily_agg, log)
             log("--- Iniciando Sección 1: Global ---",importante=True);
             try: _generar_tabla_vertical_global(df_daily_agg,detected_currency,log) 
             except Exception as e_s1: log(f"\n!!! Error Sección 1 (Global): {e_s1} !!!\n{traceback.format_exc()}",importante=True)
@@ -196,8 +196,8 @@ def procesar_reporte_rendimiento(input_files, output_dir, output_filename, statu
             try: _generar_tabla_top_ads_historico(df_daily_agg,active_days_ad,log,detected_currency, top_n=20)
             except Exception as e_s6: log(f"\n!!! Error Sección 6 (Top Ads): {e_s6} !!!\n{traceback.format_exc()}",importante=True)
 
-            insert_alertas_reglas(log)
-            insert_deteccion_fatiga(log)
+            insert_alertas_reglas(df_daily_agg, log)
+            insert_deteccion_fatiga(df_daily_agg, log)
             insert_matriz_decision(log)
 
             log("\n\n============================================================");log("===== Resumen del Proceso =====");log("============================================================")
@@ -290,7 +290,6 @@ def procesar_reporte_bitacora(input_files, output_dir, output_filename, status_q
             adset_list_for_log_b = selected_adsets if isinstance(selected_adsets, list) else [selected_adsets]
             adset_display_b = 'Todos' if adset_list_for_log_b is None or adset_list_for_log_b == ['__ALL__'] else ", ".join(adset_list_for_log_b)
             log(f"AdSets Filtrados: {adset_display_b}");
-            insert_resumen_ejecutivo(log)
 
             log("\n--- Análisis de Bitácora ---")
             log("\n--- Iniciando Agregación Diaria (Bitácora) ---", importante=True)
@@ -300,6 +299,7 @@ def procesar_reporte_bitacora(input_files, output_dir, output_filename, status_q
                 log("!!! Falló agregación diaria o no hay fechas válidas. Abortando Bitácora. !!!", importante=True)
                 status_queue.put("---ERROR---"); return
             log("Agregación diaria OK.")
+            insert_resumen_ejecutivo(df_daily_agg_full, log)
 
             log("--- Calculando Días Activos Totales (Bitácora) ---", importante=True)
             active_days_results = _calcular_dias_activos_totales(df_combined)
@@ -628,8 +628,8 @@ def procesar_reporte_bitacora(input_files, output_dir, output_filename, status_q
             df_daily_total_for_bitacora['ctr_out'] = safe_division_pct(co_tot, i_tot)
             base_rv_tot=np.where(pd.Series(rv3_tot>0).fillna(False),rv3_tot,i_tot); df_daily_total_for_bitacora['rv25_pct']=safe_division_pct(rv25_tot,base_rv_tot); df_daily_total_for_bitacora['rv75_pct']=safe_division_pct(rv75_tot,base_rv_tot); df_daily_total_for_bitacora['rv100_pct']=safe_division_pct(rv100_tot,base_rv_tot)
 
-            insert_metricas_clave_simplificadas(log)
-            insert_metricas_avanzadas(log)
+            insert_metricas_clave_simplificadas(df_daily_agg_full, log, detected_currency)
+            insert_metricas_avanzadas(df_daily_agg_full, log)
 
             _generar_tabla_bitacora_entidad('Cuenta Completa', 'Agregado Total', df_daily_total_for_bitacora,
                                             bitacora_periods_list, detected_currency, log, period_type=bitacora_comparison_type)
@@ -642,8 +642,8 @@ def procesar_reporte_bitacora(input_files, output_dir, output_filename, status_q
             _generar_tabla_performance_publico(df_daily_agg_full, log, detected_currency, top_n=5)
             _generar_tabla_tendencia_ratios(df_daily_total_for_bitacora, bitacora_periods_list, log, period_type=bitacora_comparison_type)
 
-            insert_alertas_reglas(log)
-            insert_deteccion_fatiga(log)
+            insert_alertas_reglas(df_daily_agg_full, log)
+            insert_deteccion_fatiga(df_daily_agg_full, log)
             insert_matriz_decision(log)
 
             log("\n\n============================================================");log(f"===== Resumen del Proceso (Bitácora {bitacora_comparison_type}) =====");log("============================================================")
