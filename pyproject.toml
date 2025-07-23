@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inegracion-web"
+version = "0.1.0"
+description = "Periodic report generator"
+readme = "README.md"
+requires-python = ">=3.8"
+
+[tool.setuptools]
+packages = ["data_processing"]
+py-modules = [
+    "config",
+    "file_io",
+    "formatting_utils",
+    "gpt_analysis",
+    "main",
+    "utils"
+]
