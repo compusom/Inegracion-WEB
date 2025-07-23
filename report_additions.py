@@ -21,29 +21,31 @@ def _metrics_for_period(df: pd.DataFrame, days: int):
 
 
 def insert_resumen_ejecutivo(df_daily: pd.DataFrame, log_func):
-    """Generate an executive summary based on recent metrics."""
+    """Generate an executive summary comparing last 7 days against the week prior."""
     if df_daily is None or df_daily.empty:
         log_func("## Resumen Ejecutivo")
         log_func("- Datos insuficientes para calcular tendencias")
         return
 
-    current = _metrics_for_period(df_daily, 7)
-    prev = _metrics_for_period(_subset(df_daily, df_daily['date'].max() - timedelta(days=13), df_daily['date'].max() - timedelta(days=7)), 7)
+    end_dt = df_daily['date'].max()
+    current_df = _subset(df_daily, end_dt - timedelta(days=6), end_dt)
+    prev_df = _subset(df_daily, end_dt - timedelta(days=13), end_dt - timedelta(days=7))
 
+    current = _calcular_metricas_agregadas_y_estabilidad(current_df, 7, log_func=None)
+    prev = _calcular_metricas_agregadas_y_estabilidad(prev_df, 7, log_func=None)
     roas_trend = variation(current.get('ROAS'), prev.get('ROAS'))
 
-    recent = _subset(df_daily, df_daily['date'].max() - timedelta(days=2), df_daily['date'].max())
-    ctr_hist = safe_division_pct(df_daily['clicks'].sum(), df_daily['impr'].sum())
-    ad_stats = recent.groupby('Anuncio').agg({'frequency':'mean', 'ctr':'mean'}).reset_index()
-    fatigued = ad_stats[(ad_stats['frequency']>6) & (ad_stats['ctr']*100 < ctr_hist)].shape[0]
+    cur_ad = current_df.groupby('Anuncio').agg({'frequency':'mean', 'ctr':'mean'})
+    prev_ad_ctr = prev_df.groupby('Anuncio')['ctr'].mean()
+    cur_ad = cur_ad.join(prev_ad_ctr.rename('ctr_prev'))
+    fatigued = cur_ad[(cur_ad['frequency'] > 6) & (cur_ad['ctr'] < cur_ad['ctr_prev'])].shape[0]
+
+    recommendation = "Refrescar creativos fatigados" if fatigued else "Mantener estrategia actual"
 
     log_func("## Resumen Ejecutivo")
     log_func(f"- Tendencia principal: ROAS {roas_trend} vs. semana anterior")
-    log_func(f"- Alerta clave: {fatigued} anuncios con frecuencia > 6 y CTR bajo")
-    if fatigued:
-        log_func("- Recomendación corta: Refrescar creativos fatigados")
-    else:
-        log_func("- Recomendación corta: Mantener estrategia actual")
+    log_func(f"- Alerta clave: {fatigued} anuncios con frecuencia > 6 y CTR ↓")
+    log_func(f"- Recomendación corta: {recommendation}")
 
 
 def insert_metricas_clave_simplificadas(df_daily: pd.DataFrame, log_func, currency_symbol="$"):
@@ -82,23 +84,30 @@ def insert_metricas_avanzadas(df_daily: pd.DataFrame, log_func):
         log_func("No hay datos para mostrar.")
         return
 
-    m = _metrics_for_period(df_daily, 7)
+    end_dt = df_daily['date'].max()
+    cur = _subset(df_daily, end_dt - timedelta(days=6), end_dt)
+    prev = _subset(df_daily, end_dt - timedelta(days=13), end_dt - timedelta(days=7))
 
-    ctr_decimal = (m.get('CTR') or 0) / 100
-    freq = m.get('Frecuencia') or 1
-    ctr_first = ctr_decimal / freq if freq else 0
-    ctr_rep = ctr_decimal - ctr_first
-    tsr = m.get('RV3_%', safe_division_pct(df_daily['rv3'].sum(), df_daily['impr'].sum()))
+    if {'impr_first', 'clicks_first', 'impr_repeat', 'clicks_repeat'}.issubset(cur.columns):
+        ctr_first = safe_division_pct(cur['clicks_first'].sum(), cur['impr_first'].sum())
+        ctr_rep = safe_division_pct(cur['clicks_repeat'].sum(), cur['impr_repeat'].sum())
+    else:
+        m_cur = _calcular_metricas_agregadas_y_estabilidad(cur, 7, log_func=None)
+        ctr_decimal = (m_cur.get('CTR') or 0) / 100
+        freq = m_cur.get('Frecuencia') or 1
+        ctr_first = ctr_decimal / freq if freq else 0
+        ctr_rep = ctr_decimal - ctr_first
 
-    last_day = _subset(df_daily, df_daily['date'].max(), df_daily['date'].max())
-    roas_last = _calcular_metricas_agregadas_y_estabilidad(last_day, 1, log_func=None).get('ROAS')
-    roas_7d = m.get('ROAS')
-    delta_roas = variation(roas_last, roas_7d)
+    tsr = safe_division_pct(cur.get('rv3', pd.Series()).sum(), cur.get('impr', pd.Series()).sum())
+
+    roas_daily_cur = safe_division(cur.groupby('date')['value'].sum(), cur.groupby('date')['spend'].sum())
+    roas_daily_prev = safe_division(prev.groupby('date')['value'].sum(), prev.groupby('date')['spend'].sum())
+    delta_roas = variation(roas_daily_cur.mean(), roas_daily_prev.mean())
 
     log_func("\n## Métricas Avanzadas")
     log_func("| Métrica | Valor |")
     log_func("|---|---|")
-    log_func(f"| CTR 1ª impresión vs. repeticiones | {fmt_pct(ctr_first*100)} / {fmt_pct(ctr_rep*100)} |")
+    log_func(f"| CTR 1ª impresión vs. repeticiones | {fmt_pct(ctr_first)} / {fmt_pct(ctr_rep)} |")
     log_func(f"| Thumb‑Stop Rate (3s Views/Imp.) | {fmt_pct(tsr)} |")
     log_func(f"| Delta diario de ROAS (%) vs. 7d | {delta_roas} |")
 
